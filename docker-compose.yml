@@ -1,0 +1,141 @@
+version: '3.8'
+
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge
+
+services:
+  autoheal:
+    restart: ${AUTOHEAL_RESTART_MODE}
+    build:
+      context: ./autoheal
+      args:
+        - AUTOHEAL_VERSION=${AUTOHEAL_VERSION}
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=${AUTOHEAL_CONTAINER_LABEL}
+      - AUTOHEAL_INTERVAL=${AUTOHEAL_INTERVAL}
+      - AUTOHEAL_START_PERIOD=${AUTOHEAL_START_PERIOD}
+    volumes:
+      - ${DOCKER_SOCK}:${AUTOHEAL_DOCKER_SOCK}
+    networks:
+      - backend
+  dockerhost:
+    restart: always
+    image: qoomon/docker-host
+    cap_add: 
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      - backend
+      - frontend
+  gemstash:
+    restart: ${GEMSTASH_RESTART_MODE}
+    image: tenshiamd/gemstash:latest
+    ports:
+      - ${GEMSTASH_PORT}:9292
+    volumes:
+      - ${DATA_SAVE_PATH}/gemstash:/home/gemstash/.gemstash
+  mariadb:
+    restart: ${MARIADB_RESTART_MODE}
+    build: 
+      context: ./mariadb
+      args:
+        - MYSQL_VERSION=${MARIADB_VERSION}
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+    ports:
+      - ${MARIADB_PORT}:3306
+    networks:
+      - backend
+    volumes:
+      - ${DATA_SAVE_PATH}/mariadb:/var/lib/mysql
+  mysql:
+    restart: ${MYSQL_RESTART_MODE}
+    build: 
+      context: ./mysql
+      args:
+        - MYSQL_VERSION=${MYSQL_VERSION}
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    ports:
+      - ${MYSQL_PORT}:3306
+    volumes:
+      - ${DATA_SAVE_PATH}/mysql:/var/lib/mysql
+    networks:
+      - backend
+  nginx:
+    restart: always
+    image: tenshiamd/nginx:v1.0.1
+    depends_on: 
+      - dockerhost
+    environment:
+      - NGINX_WORKER_PROCESSES=${NGINX_WORKER_PROCESSES}
+      - NGINX_WORKER_CONNECTIONS=${NGINX_WORKER_CONNECTIONS}
+      - NGINX_PAGESPEED=${NGINX_PAGESPEED}
+      - NGINX_PAGESPEED_IMG=${NGINX_PAGESPEED_IMG}
+      - NGINX_PAGESPEED_JS=${NGINX_PAGESPEED_JS}
+      - NGINX_PAGESPEED_CSS=${NGINX_PAGESPEED_CSS}
+      - NGINX_PAGESPEED_STORAGE=${NGINX_PAGESPEED_STORAGE}
+      - NGINX_DEFAULT_SERVER=${NGINX_DEFAULT_SERVER}
+      - NGINX_FASTCGI_GEOIP=${NGINX_FASTCGI_GEOIP}
+      - NGINX_KEEPALIVE_TIMEOUT=${NGINX_KEEPALIVE_TIMEOUT}
+    networks:
+      - backend
+      - frontend
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ${DATA_SAVE_PATH}/nginx/sites-enabled:/etc/nginx/sites-enabled
+      - ${DATA_SAVE_PATH}/nginx/ssl-certs:/etc/nginx/ssl
+  postgresql:
+    restart: ${PG_RESTART_MODE}
+    build: 
+      context: ./postgresql
+      args:
+        - PG_VERSION=${PG_VERSION}
+    environment:
+      - PG_PASSWORD=${PG_PASSWORD}
+      - PG_MAX_CONNECTIONS=${PG_MAX_CONNECTIONS}
+      - PG_SHARED_BUFFERS=${PG_SHARED_BUFFERS}
+      - PG_EFFECTIVE_CACHE_SIZE=${PG_EFFECTIVE_CACHE_SIZE}
+      - PG_MAINTENANCE_WORK_MEM=${PG_MAINTENANCE_WORK_MEM}
+      - PG_CHECKPOINT_COMPLETION_TARGET=${PG_CHECKPOINT_COMPLETION_TARGET}
+      - PG_WALL_BUFFERS=${PG_WALL_BUFFERS}
+      - PG_DEFAULT_STATISTICS_TARGET=${PG_DEFAULT_STATISTICS_TARGET}
+      - PG_RANDOM_PAGE_COST=${PG_RANDOM_PAGE_COST}
+      - PG_EFFECTIVE_IO_CONCURRENCY=${PG_EFFECTIVE_IO_CONCURRENCY}
+      - PG_WORK_MEM=${PG_WORK_MEM}
+      - PG_MIN_WAL_SIZE=${PG_MIN_WAL_SIZE}
+      - PG_MAX_WAL_SIZE=${PG_MAX_WAL_SIZE}
+      - PG_MAX_WORKER_PROCESSES=${PG_MAX_WORKER_PROCESSES}
+      - PG_MAX_PARALLEL_WORKERS_PER_GATHER=${PG_MAX_PARALLEL_WORKERS_PER_GATHER}
+      - PG_MAX_PARALLEL_WORKERS=${PG_MAX_PARALLEL_WORKERS}
+    networks:
+      - backend
+    ports:
+      - ${PG_PORT}:5432
+    volumes:
+      - ${DATA_SAVE_PATH}/postgresql:/var/lib/postgresql
+  redis:
+    restart: ${REDIS_RESTART_MODE}
+    image: tenshiamd/redis:${REDIS_VERSION}
+    command: ${REDIS_CMD}
+    networks:
+      - backend
+    ports:
+      - ${REDIS_PORT}:6379
+    volumes:
+      - ${DATA_SAVE_PATH}/redis:/var/lib/redis
+  solr:
+    restart: ${SOLR_RESTART_MODE}
+    image: tenshiamd/solr:${SOLR_VERSION}
+    networks:
+      - backend
+    ports:
+      - ${SOLR_PORT}:8983
+    volumes:
+      - ${DATA_SAVE_PATH}/solr:/var/lib/solr
+      - ./solr/solrconfig.xml:/opt/solr/server/solr/configsets/default/conf/solrconfig.xml
